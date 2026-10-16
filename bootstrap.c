@@ -175,16 +175,60 @@ void pars_proc() {
     }
 }
 
+void pars_stmt() {
+    printf("; Stmt\n");
+    if (lexr.tok.cat == TOK_KW_BEG) {
+        while (lexr.tok.cat != TOK_KW_END) {
+            lexr_next();
+        }
+    }
+    lexr_next();
+}
+
 void pars_code() {
     output(
-        ".code64"
-        ".rodata"
+        ".code64\n"
+        ".rodata\n"
+        ".globl _start\n"
     );
+
+    while (lexr.tok.cat == TOK_KW_CONST) {
+        lexr_next();
+        output("\t\"CONST@_%s\":", pool.idens.val[lexr.tok.val]);
+    }
+    output(".bss\n");
+    while (lexr.tok.cat == TOK_KW_VAR) {
+        lexr_next();
+        if (lexr.tok.cat != TOK_IDEN) {
+            err();
+        }
+    add_var:
+        output("\"VAR@_%s\":\n"
+               "\t.space 8\n", pool.idens.val[lexr.tok.val]);
+        lexr_next();
+        if (lexr.tok.cat == TOK_COMMA) {
+            lexr_next();
+            goto add_var;
+        }
+        if (lexr.tok.cat != TOK_SEMI) {
+            err();
+        }
+        lexr_next();
+    }
+
+    while (lexr.tok.cat == TOK_KW_PROC) {
+        lexr_next();
+        output("\"PROC@_%s\":\n", pool.idens.val[lexr.tok.val]);
+        lexr_next();/*ident*/
+        lexr_next(); /*;*/
+        pars_stmt();
+    }
+    output("_start:\n");
+    pars_stmt();
 }
 
 int main() {
     lexr_kickstart();
-    while (lexr.tok.cat != TOK_PERIOD) {
-        pars_code();
-    }
+    pars_code();
+    return 0;
 }
