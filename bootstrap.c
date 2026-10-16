@@ -168,24 +168,119 @@ void pars_const() {
     exit(EXIT_SUCCESS);
 }
 
-void pars_proc() {
-    lexr_next();
-    while (lexr.tok.cat == TOK_KW_CONST) {
-        pars_const();
+
+void pars_expr();
+
+void pars_fact() {
+    output("; factor\n");
+    switch (lexr.tok.cat)
+    {
+    case TOK_IDEN:
+        output("\tmov \"VAR@_%s\"(%%rip), %%rax\n", pool.idens.val[lexr.tok.val]);
+        lexr_next();
+        break;
+    case TOK_KW_CONST:
+        output("\tmov $%d, %%rax\n", lexr.tok.val);
+        lexr_next();
+        break;
+    case TOK_PAREN_L:
+        lexr_next();
+        pars_expr();
+        lexr_next();
+        break;
     }
+}
+
+void pars_term() {
+    output("; term\n");
+    pars_fact();
+    switch (lexr.tok.cat)
+    {
+    case TOK_MUL:
+        output("\tpush %%rax\n");
+        lexr_next();
+        pars_term();
+        output("\tpop %%rbx\n"
+               "\timul %%rbx\n");
+        break;
+    case TOK_DIV:
+        output("\tpush %%rax\n");
+        lexr_next();
+        pars_term();
+        output("\tpop %%rbx\n"
+               "\tidiv %%rbx\n");
+        break;
+    default:
+        break;
+    }
+}
+
+void pars_expr() {
+    output("; expression\n");
+    switch (lexr.tok.cat)
+    {
+    case TOK_SUB:
+        pars_term();
+        output("\tneg %%rax\n");
+    case TOK_ADD:
+    default:
+        pars_term();
+    }
+repeat:
+    switch (lexr.tok.cat)
+    {
+    case TOK_SUB:
+        output("\tpush %%rax\n");
+        lexr_next();
+        pars_term();
+        output("\tpop %%rbx\n"
+               "\tsub %%rbx, %%rax\n");
+        break;
+    case TOK_ADD:
+        output("\tpush %%rax\n");
+        lexr_next();
+        pars_term();
+        output("\tpop %%rbx\n"
+               "\tadd %%rbx, %%rax\n");
+        break;
+    default:
+        goto done;
+    }
+    goto repeat;
+done:
+    return;
 }
 
 void pars_stmt() {
-    printf("; Stmt\n");
-    if (lexr.tok.cat == TOK_KW_BEG) {
-        while (lexr.tok.cat != TOK_KW_END) {
+    output("; statement\n");
+    switch (lexr.tok.cat)
+    {
+    case TOK_IDEN:
+        lexr_next();
+        lexr_next(); /* := */
+        pars_expr();
+        output("\tmov %%rax, \"VAR@_%s\"(%%rip)\n", pool.idens.val[lexr.tok.val]);
+        break;
+    case TOK_QUEST:
+        break;
+    case TOK_KW_BEG:
+        do {
             lexr_next();
-        }
+            pars_stmt();
+            if (lexr.tok.cat == TOK_KW_END) {
+                break;
+            }
+        } while (lexr.tok.cat == TOK_SEMI);
+        lexr_next();
+        break;
+    case TOK_KW_IF:
+    case TOK_KW_WHILE:
+    default:
     }
-    lexr_next();
 }
 
 void pars_code() {
+    output("; program\n");
     output(
         ".code64\n"
         ".rodata\n"
