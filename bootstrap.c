@@ -16,19 +16,20 @@ enum {
     TOK_KW_WHILE,
     TOK_KW_DO,
     TOK_KW_CALL,
+    TOK_KW_ODD,
     
     TOK_PERIOD,
+    TOK_ASSIGN,
     TOK_EQU,
     TOK_COMMA,
     TOK_SEMI,
-    TOK_ASSIGN,
     TOK_QUEST,
     TOK_EXCL,
     TOK_HASH,
-    TOK_LESS,
     TOK_LEQ,
-    TOK_GRTR,
+    TOK_LESS,
     TOK_GEQ,
+    TOK_GRTR,
     TOK_ADD,
     TOK_SUB,
     TOK_MUL,
@@ -52,18 +53,19 @@ char const * const TOKS[] = {
     "WHILE",
     "DO",
     "CALL",
+    "ODD",
     ".",
+    ":=",
     "=",
     ",",
     ";",
-    ":=",
     "?",
     "!",
     "#",
-    "<",
     "<=",
-    ">",
+    "<",
     ">=",
+    ">",
     "+",
     "-",
     "*",
@@ -165,9 +167,12 @@ void lexr_kickstart() {
 
 void pars_const() {
     lexr_next();
-    exit(EXIT_SUCCESS);
 }
 
+int disam() {
+    static int num = 0;
+    return num++;
+}
 
 void pars_expr();
 
@@ -179,7 +184,7 @@ void pars_fact() {
         output("\tmov \"VAR@_%s\"(%%rip), %%rax\n", pool.idens.val[lexr.tok.val]);
         lexr_next();
         break;
-    case TOK_KW_CONST:
+    case TOK_NUM:
         output("\tmov $%d, %%rax\n", lexr.tok.val);
         lexr_next();
         break;
@@ -251,31 +256,98 @@ done:
     return;
 }
 
+void pars_stmt();
+
+void pars_blok() {
+    do {
+        lexr_next();
+        pars_stmt();
+        if (lexr.tok.cat == TOK_KW_END) {
+            break;
+        }
+    } while (lexr.tok.cat == TOK_SEMI);
+    lexr_next();
+}
+
+void pars_cond(int jn) {
+    if (lexr.tok.cat == TOK_KW_ODD) {
+        lexr_next();
+        pars_expr();
+        output("\tand $1, %%rax\n"
+               "\tcmp $1, %%rax\n"
+               "je %d", jn);
+    }
+    else {
+        int cond;
+        pars_expr();
+        output("\tpush %%rax\n");
+        cond = lexr.tok.cat;
+        lexr_next();
+        pars_expr();
+        output("\tpop %%rbx\n");
+        output("\tcmp %%rax, %%rbx\n");
+
+        switch (cond)
+        {
+        case TOK_EQU:
+            output("\tje \"JMP@_%d\"\n", jn);
+            break;
+        case TOK_HASH:
+            output("\tjne \"JMP@_%d\"\n", jn);
+            break;
+        case TOK_LESS:
+            output("\tjl \"JMP@_%d\"\n", jn);
+            break;
+        case TOK_LEQ:
+            output("\tjle \"JMP@_%d\"\n", jn);
+            break;
+        case TOK_GRTR:
+            output("\tjg \"JMP@_%d\"\n", jn);
+            break;
+        case TOK_GEQ:
+            output("\tjge \"JMP@_%d\"\n", jn);
+            break;
+        }
+    }
+}
+
 void pars_stmt() {
-    output("; statement\n");
+    output("; statement. Tok is %d\n", lexr.tok.cat);
     switch (lexr.tok.cat)
     {
-    case TOK_IDEN:
+    case TOK_IDEN: {
+        char *name;
+        name = pool.idens.val[lexr.tok.val];
         lexr_next();
         lexr_next(); /* := */
         pars_expr();
-        output("\tmov %%rax, \"VAR@_%s\"(%%rip)\n", pool.idens.val[lexr.tok.val]);
+        output("\tmov %%rax, \"VAR@_%s\"(%%rip)\n", name);
+    }
         break;
     case TOK_QUEST:
         break;
     case TOK_KW_BEG:
-        do {
-            lexr_next();
-            pars_stmt();
-            if (lexr.tok.cat == TOK_KW_END) {
-                break;
-            }
-        } while (lexr.tok.cat == TOK_SEMI);
-        lexr_next();
+        pars_blok();
         break;
-    case TOK_KW_IF:
-    case TOK_KW_WHILE:
+    case TOK_KW_IF: {
+        int false_case;
+        false_case = disam();
+    }
+        break;
+    case TOK_KW_WHILE: {
+        int repeat_case, end_case;
+        output("; While\n");
+        repeat_case = disam();
+        end_case = disam();
+        lexr_next();
+        output("\"JMP@_%d\":\n", repeat_case);
+        pars_cond(end_case);
+        output("\"JMP@_%d\":\n", end_case);
+
+    }
+        break;
     default:
+        break;
     }
 }
 
@@ -316,7 +388,8 @@ void pars_code() {
         output("\"PROC@_%s\":\n", pool.idens.val[lexr.tok.val]);
         lexr_next();/*ident*/
         lexr_next(); /*;*/
-        pars_stmt();
+        pars_blok();
+        lexr_next(); /*;*/
     }
     output("_start:\n");
     pars_stmt();
