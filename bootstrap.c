@@ -3,7 +3,10 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#define output printf
+
 enum {
+    TOK_KW_CONST,
     TOK_KW_VAR,
     TOK_KW_PROC,
     TOK_KW_BEG,
@@ -39,15 +42,16 @@ enum {
 };
 
 char const * const TOKS[] = {
-    "var",
-    "proc",
-    "beg",
-    "end",
-    "if",
-    "then",
-    "while",
-    "do",
-    "call",
+    "CONST",
+    "VAR",
+    "PROCEDURE",
+    "BEGIN",
+    "END",
+    "IF",
+    "THEN",
+    "WHILE",
+    "DO",
+    "CALL",
     ".",
     "=",
     ",",
@@ -73,9 +77,9 @@ struct {
     struct {
         char **val;
         int len;
-    } idents;
+    } idens;
 
-} pool;
+} pool = {0};
 
 struct {
     struct {
@@ -84,38 +88,98 @@ struct {
     } tok;
     char buf[4096];
     char *src;
-} lexr;
+    int line;
+} lexr = {0};
+
+void err() {
+    fprintf(stderr, "Error on line %d\n"
+        "%s"
+        "at:\n"
+        "%s"
+    , lexr.line, lexr.buf, lexr.src);
+    exit(EXIT_FAILURE);
+} 
 
 void lexr_next() {
-for (;;) {
-    if (!*lexr.src) {
-        lexr.src = fgets(lexr.buf, 4096, stdin);
-    }
-    else if (isdigit(*lexr.src)) {
-        lexr.tok.cat = TOK_NUM;
-        lexr.tok.val = strtol(lexr.src, &lexr.src, 0);
-    }
-    else {
-        int i;
-        for (i = 0; TOKS[i]; ++i) {
-            int len;
-            len = strlen(TOKS[i]);
+    for (;;) {
+        if (!*lexr.src) {
+            lexr.tok.cat = TOK_EOF;
+            return;
+        }
+        else if (*lexr.src == '\n') {
+            lexr.src = fgets(lexr.buf, 4096, stdin);
+            ++lexr.line;
+        }
+        else if (isspace(*lexr.src)) {
+            ++lexr.src;
+        }
+        else if (isdigit(*lexr.src)) {
+            lexr.tok.cat = TOK_NUM;
+            lexr.tok.val = strtol(lexr.src, &lexr.src, 0);
+            return;
+        }
+        else {
+            int i, j;
+            for (i = 0; TOKS[i]; ++i) {
+                j = strlen(TOKS[i]);
+                if (!memcmp(lexr.src, TOKS[i], j) &&
+                    (!isalnum(*lexr.src) || !isalnum(lexr.src[j])))
+                {
+                    lexr.tok.cat = i;
+                    lexr.src += j;
+                    return;
+                }
+            }
+            i = 0;
+            while (isalnum(lexr.src[++i]));
+            lexr.tok.cat = TOK_IDEN;
+            for (j = 0; j < pool.idens.len; ++j) {
+                if (strlen(pool.idens.val[j]) == i && !memcmp(lexr.src, pool.idens.val[j], i)) {
+                    lexr.tok.val = j;
+                    lexr.src += i;
+                    return;
+                }
+            }
+
+            j = pool.idens.len;
+
+            pool.idens.val = realloc(pool.idens.val, ++pool.idens.len);
+            pool.idens.val[j] = malloc(i + 1);
+
+            memcpy(pool.idens.val[j], lexr.src, i);
+            pool.idens.val[j][i] = '\0';
+
+            lexr.tok.val = j;
+
+            lexr.src += i;
+            return;
         }
     }
 }
-}
 
 void lexr_kickstart() {
-    lexr.buf[0] = '\0';
+    lexr.buf[0] = '\n';
     lexr.src = lexr.buf;
     lexr_next();
 }
 
+void pars_const() {
+    lexr_next();
+    exit(EXIT_SUCCESS);
+}
+
+void pars_proc() {
+    lexr_next();
+    while (lexr.tok.cat == TOK_KW_CONST) {
+        pars_const();
+    }
+}
 
 void pars_code() {
-    switch (lexr.tok.cat) {
-    case TOK_KW_PROG
-    }
+    output(
+        ".code64"
+        ".rodata"
+    );
 }
 
 int main() {
