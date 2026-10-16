@@ -312,7 +312,7 @@ void pars_cond(int jn) {
 }
 
 void pars_stmt() {
-    output("; statement. Tok is %d\n", lexr.tok.cat);
+    output("; statement.\n");
     switch (lexr.tok.cat)
     {
     case TOK_IDEN: {
@@ -324,7 +324,19 @@ void pars_stmt() {
         output("\tmov %%rax, \"VAR@_%s\"(%%rip)\n", name);
     }
         break;
+    case TOK_KW_CALL:
+        lexr_next();
+        output("\tcall \"PROC_%s\"\n", pool.idens.val[lexr.tok.val]);
+        break;
     case TOK_QUEST:
+        output("\t");
+        lexr_next();
+        lexr_next();
+        break;
+    case TOK_EXCL:
+        output("\t");
+        lexr_next();
+        lexr_next();
         break;
     case TOK_KW_BEG:
         pars_blok();
@@ -343,7 +355,8 @@ void pars_stmt() {
         output("\"JMP@_%d\":\n", repeat_case);
         pars_cond(end_case);
         output("\"JMP@_%d\":\n", end_case);
-
+        lexr_next(); /* DO */
+        pars_stmt();
     }
         break;
     default:
