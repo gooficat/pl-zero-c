@@ -1,0 +1,49 @@
+.code64
+.data
+.globl _start
+.extern pl.getc
+.extern pl.putc
+.bss
+VAR._x:
+	.space 8
+VAR._squ:
+	.space 8
+.text
+PROC._square:
+/ block
+	mov VAR._x(%rip), %rax
+	push %rax
+	mov VAR._x(%rip), %rax
+	pop %rbx
+	imul %rbx
+	mov %rax, VAR._squ(%rip)
+/ end block
+	ret
+_start:
+/ block
+	mov $1, %rax
+	mov %rax, VAR._x(%rip)
+JMP._0:
+	mov VAR._x(%rip), %rax
+	push %rax
+	mov $10, %rax
+	pop %rbx
+	cmp %rbx, %rax
+	jle JMP._1
+	jmp JMP._2
+JMP._1:
+/ block
+	call PROC._square
+	mov VAR._squ(%rip), %rax
+	call pl.putc
+	mov VAR._x(%rip), %rax
+	push %rax
+	mov $1, %rax
+	pop %rbx
+	add %rbx, %rax
+	mov %rax, VAR._x(%rip)
+/ end block
+	jmp JMP._0
+JMP._2:
+/ end block
+	call pl.exit

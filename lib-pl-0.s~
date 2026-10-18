@@ -1,0 +1,48 @@
+.code64
+
+.globl pl.getc
+.globl pl.putc
+.globl pl.exit
+
+.bss
+
+num_buf:
+.space 20
+
+.text
+
+
+pl.getc:
+    mov $0, %eax
+    mov $1, %edi
+    lea num_buf(%rip), %rsi
+    mov $20, %edx
+    syscall
+    lea num_buf + 20(%rip), %rsi
+    
+    ret
+
+pl.putc:
+    lea num_buf + 20(%rip), %rsi
+pl.putc.repeat:
+    mov $10, %rdi
+    xor %rdx, %rdx
+    idiv %rdi
+    add $'0', %dl
+    mov %dl, (%rsi)
+    dec %rsi
+    cmp $0, %rax
+    jne pl.putc.repeat
+    mov $1, %rax
+    mov $1, %rdi
+    lea num_buf + 20(%rip), %rdx
+    sub %rsi, %rdx
+    syscall
+    ret
+
+
+pl.exit:
+    mov $60, %eax
+    mov $0, %edi
+    syscall
+

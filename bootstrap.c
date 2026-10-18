@@ -177,11 +177,10 @@ int disam() {
 void pars_expr();
 
 void pars_fact() {
-    output("; factor\n");
     switch (lexr.tok.cat)
     {
     case TOK_IDEN:
-        output("\tmov \"VAR@_%s\"(%%rip), %%rax\n", pool.idens.val[lexr.tok.val]);
+        output("\tmov VAR.%s(%%rip), %%rax\n", pool.idens.val[lexr.tok.val]);
         lexr_next();
         break;
     case TOK_NUM:
@@ -197,7 +196,6 @@ void pars_fact() {
 }
 
 void pars_term() {
-    output("; term\n");
     pars_fact();
     switch (lexr.tok.cat)
     {
@@ -221,7 +219,6 @@ void pars_term() {
 }
 
 void pars_expr() {
-    output("; expression\n");
     switch (lexr.tok.cat)
     {
     case TOK_SUB:
@@ -239,7 +236,8 @@ repeat:
         lexr_next();
         pars_term();
         output("\tpop %%rbx\n"
-               "\tsub %%rbx, %%rax\n");
+               "\tsub %%rbx, %%rax\n"
+               "\txchg %%rbx, %%rax");
         break;
     case TOK_ADD:
         output("\tpush %%rax\n");
@@ -259,6 +257,7 @@ done:
 void pars_stmt();
 
 void pars_blok() {
+printf("/ block\n");
     do {
         lexr_next();
         pars_stmt();
@@ -267,6 +266,7 @@ void pars_blok() {
         }
     } while (lexr.tok.cat == TOK_SEMI);
     lexr_next();
+printf("/ end block\n");
 }
 
 void pars_cond(int jn) {
@@ -275,7 +275,7 @@ void pars_cond(int jn) {
         pars_expr();
         output("\tand $1, %%rax\n"
                "\tcmp $1, %%rax\n"
-               "je %d", jn);
+               "jne %d", jn);
     }
     else {
         int cond;
@@ -290,29 +290,28 @@ void pars_cond(int jn) {
         switch (cond)
         {
         case TOK_EQU:
-            output("\tje \"JMP@_%d\"\n", jn);
+            output("\tjne JMP.%d\n", jn);
             break;
         case TOK_HASH:
-            output("\tjne \"JMP@_%d\"\n", jn);
+            output("\tje JMP.%d\n", jn);
             break;
         case TOK_LESS:
-            output("\tjl \"JMP@_%d\"\n", jn);
+            output("\tjge JMP.%d\n", jn);
             break;
         case TOK_LEQ:
-            output("\tjle \"JMP@_%d\"\n", jn);
+            output("\tjg JMP.%d\n", jn);
             break;
         case TOK_GRTR:
-            output("\tjg \"JMP@_%d\"\n", jn);
+            output("\tjle JMP.%d\n", jn);
             break;
         case TOK_GEQ:
-            output("\tjge \"JMP@_%d\"\n", jn);
+            output("\tjl JMP.%d\n", jn);
             break;
         }
     }
 }
 
 void pars_stmt() {
-    output("; statement.\n");
     switch (lexr.tok.cat)
     {
     case TOK_IDEN: {
@@ -321,22 +320,24 @@ void pars_stmt() {
         lexr_next();
         lexr_next(); /* := */
         pars_expr();
-        output("\tmov %%rax, \"VAR@_%s\"(%%rip)\n", name);
+        output("\tmov %%rax, VAR.%s(%%rip)\n", name);
     }
         break;
     case TOK_KW_CALL:
         lexr_next();
-        output("\tcall \"PROC_%s\"\n", pool.idens.val[lexr.tok.val]);
+        output("\tcall PROC.%s\n", pool.idens.val[lexr.tok.val]);
+        lexr_next();
         break;
     case TOK_QUEST:
-        output("\t");
         lexr_next();
+        output("\tcall pl.getc\n"
+               "\tmov %%rax, VAR.%s(%%rip)\n");
         lexr_next();
         break;
     case TOK_EXCL:
-        output("\t");
         lexr_next();
-        lexr_next();
+        pars_expr();
+        output("\tcall pl.putc\n");
         break;
     case TOK_KW_BEG:
         pars_blok();
@@ -344,19 +345,22 @@ void pars_stmt() {
     case TOK_KW_IF: {
         int false_case;
         false_case = disam();
+        pars_cond(false_case);
+        pars_stmt();
+        output("JMP.%d:\n", false_case);
     }
         break;
     case TOK_KW_WHILE: {
-        int repeat_case, end_case;
-        output("; While\n");
-        repeat_case = disam();
-        end_case = disam();
+        int repeat, end;
+        repeat = disam();
+        end = disam();
         lexr_next();
-        output("\"JMP@_%d\":\n", repeat_case);
-        pars_cond(end_case);
-        output("\"JMP@_%d\":\n", end_case);
+        output("JMP.%d:\n", repeat);
+        pars_cond(end);
         lexr_next(); /* DO */
         pars_stmt();
+        output("\tjmp JMP.%d\n"
+               "JMP.%d:\n", repeat, end);
     }
         break;
     default:
@@ -365,16 +369,17 @@ void pars_stmt() {
 }
 
 void pars_code() {
-    output("; program\n");
     output(
         ".code64\n"
-        ".rodata\n"
+        ".data\n"
         ".globl _start\n"
+        ".extern pl.getc\n"
+        ".extern pl.putc\n"
     );
 
     while (lexr.tok.cat == TOK_KW_CONST) {
         lexr_next();
-        output("\t\"CONST@_%s\":", pool.idens.val[lexr.tok.val]);
+        output("\tCONST.%s:", pool.idens.val[lexr.tok.val]);
     }
     output(".bss\n");
     while (lexr.tok.cat == TOK_KW_VAR) {
@@ -383,7 +388,7 @@ void pars_code() {
             err();
         }
     add_var:
-        output("\"VAR@_%s\":\n"
+        output("VAR.%s:\n"
                "\t.space 8\n", pool.idens.val[lexr.tok.val]);
         lexr_next();
         if (lexr.tok.cat == TOK_COMMA) {
@@ -395,17 +400,19 @@ void pars_code() {
         }
         lexr_next();
     }
-
+    output(".text\n");
     while (lexr.tok.cat == TOK_KW_PROC) {
         lexr_next();
-        output("\"PROC@_%s\":\n", pool.idens.val[lexr.tok.val]);
+        output("PROC.%s:\n", pool.idens.val[lexr.tok.val]);
         lexr_next();/*ident*/
         lexr_next(); /*;*/
         pars_blok();
         lexr_next(); /*;*/
+        output("\tret\n");
     }
     output("_start:\n");
     pars_stmt();
+    output("\tcall pl.exit\n");
 }
 
 int main() {
