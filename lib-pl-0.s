@@ -11,39 +11,31 @@ num_buf:
 
 .text
 
-
 pl.getc:
-    mov $0, %eax
-    mov $1, %edi
-    lea num_buf(%rip), %rsi
-    mov $20, %edx
-    syscall
-    lea num_buf + 20(%rip), %rsi
-    
+    sub $8, %rsp
+    lea in_str(%rip), %rdi
+    lea (%rsp), %rsi
+    xor %rax, %rax
+    call scanf
+    pop %rax
     ret
 
 pl.putc:
-    lea num_buf + 19(%rip), %rsi
-pl.putc.repeat:
-    mov $10, %rdi
-    xor %rdx, %rdx
-    idiv %rdi
-    add $'0', %dl
-    mov %dl, (%rsi)
-    dec %rsi
-    cmp $0, %rax
-    jne pl.putc.repeat
-    mov $1, %rax
-    mov $1, %rdi
-    lea num_buf + 19(%rip), %rdx
-    sub %rsi, %rdx
-    inc %rdx
-    syscall
+    mov %rax, %rsi
+    lea out_str(%rip), %rdi
+    xor %rax, %rax
+    call printf
     ret
 
 
 pl.exit:
-    mov $60, %eax
-    mov $0, %edi
-    syscall
+    xor %eax, %eax
+    call exit
 
+.data
+
+in_str:
+    .asciz "%d"
+
+out_str:
+    .asciz "%d\n"

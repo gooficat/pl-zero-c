@@ -372,7 +372,7 @@ void pars_code() {
     output(
         ".code64\n"
         ".data\n"
-        ".globl _start\n"
+        ".globl main\n"
         ".extern pl.getc\n"
         ".extern pl.putc\n"
     );
@@ -410,7 +410,7 @@ void pars_code() {
         lexr_next(); /*;*/
         output("\tret\n");
     }
-    output("_start:\n");
+    output("main:\n");
     pars_stmt();
     output("\tcall pl.exit\n");
 }
