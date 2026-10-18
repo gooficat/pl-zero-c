@@ -257,7 +257,6 @@ done:
 void pars_stmt();
 
 void pars_blok() {
-printf("/ block\n");
     do {
         lexr_next();
         pars_stmt();
@@ -266,7 +265,6 @@ printf("/ block\n");
         }
     } while (lexr.tok.cat == TOK_SEMI);
     lexr_next();
-printf("/ end block\n");
 }
 
 void pars_cond(int jn) {
